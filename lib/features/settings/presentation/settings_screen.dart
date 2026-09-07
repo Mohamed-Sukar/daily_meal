@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../providers/settings_providers.dart';
+import 'widgets/legal_policies_dialog.dart' as widgets;
 
 /// Formats cooldown duration with correct Arabic dual and plural grammar.
 String formatCooldown(int days) {
@@ -232,7 +233,49 @@ class SettingsScreen extends ConsumerWidget {
 
               const SizedBox(height: 20),
 
-              // 5. Reset Defaults Action
+              // 5. Legal Policies Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'السياسات القانونية',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.privacy_tip_outlined),
+                        title: const Text('سياسة الخصوصية'),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => const widgets.LegalPoliciesDialog(isPrivacy: true),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.description_outlined),
+                        title: const Text('إخلاء المسؤولية والشروط'),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => const widgets.LegalPoliciesDialog(isPrivacy: false),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // 6. Reset Defaults Action
               Center(
                 child: TextButton.icon(
                   onPressed: () async {

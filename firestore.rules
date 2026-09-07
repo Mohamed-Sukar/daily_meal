@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Anyone can view meals in the vault; signed-in users (admin) can write/edit/delete
+    match /vault_meals/{mealId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Anyone can submit an idea to staging; signed-in users (admin) can review/approve/delete
+    match /staging_meals/{mealId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+  }
+}

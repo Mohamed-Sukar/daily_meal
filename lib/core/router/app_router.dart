@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/vault/presentation/meal_vault_screen.dart';
 import '../../features/history/presentation/history_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/admin/presentation/admin_root_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNav');
 final _shellNavigatorHome = GlobalKey<NavigatorState>(debugLabel: 'shellHome');
@@ -16,8 +18,15 @@ final _shellNavigatorSettings = GlobalKey<NavigatorState>(debugLabel: 'shellSett
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/',
+    initialLocation: kIsWeb ? '/admin' : '/',
     routes: [
+      GoRoute(
+        path: '/admin',
+        name: 'admin',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: AdminRootScreen(),
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return ScaffoldWithNavBar(navigationShell: navigationShell);

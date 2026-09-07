@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_providers.dart';
+import '../../../core/services/notification_service.dart';
 
 /// Reactive stream watching the singleton AppSettings row.
 final appSettingsProvider = StreamProvider<AppSettingsData>((ref) {
@@ -65,6 +66,12 @@ class SettingsController extends AsyncNotifier<void> {
     try {
       final dao = ref.read(appSettingsDaoProvider);
       await dao.updateNotificationTime(hour, minute);
+      
+      final settings = await dao.watchSettings().first;
+      if (settings.notificationsEnabled) {
+        await NotificationService.instance.scheduleDailyNotification(hour: hour, minute: minute);
+      }
+      
       state = const AsyncValue.data(null);
     } catch (err, st) {
       state = AsyncValue.error(err, st);
@@ -78,6 +85,18 @@ class SettingsController extends AsyncNotifier<void> {
     try {
       final dao = ref.read(appSettingsDaoProvider);
       await dao.toggleNotifications(enabled);
+      
+      if (enabled) {
+        final settings = await dao.watchSettings().first;
+        await NotificationService.instance.requestPermissions();
+        await NotificationService.instance.scheduleDailyNotification(
+          hour: settings.notificationHour, 
+          minute: settings.notificationMinute
+        );
+      } else {
+        await NotificationService.instance.cancelNotification();
+      }
+      
       state = const AsyncValue.data(null);
     } catch (err, st) {
       state = AsyncValue.error(err, st);

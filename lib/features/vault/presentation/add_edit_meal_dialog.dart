@@ -173,6 +173,7 @@ class _AddEditMealDialogState extends ConsumerState<AddEditMealDialog> {
                           TextFormField(
                             key: const Key('meal_form_name_field'),
                             controller: _nameController,
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'اسم الأكلة *',
                               hintText: 'مثال: ملوخية بالفراخ، كفتة مشوية...',
@@ -284,6 +285,7 @@ class _AddEditMealDialogState extends ConsumerState<AddEditMealDialog> {
                             key: const Key('meal_form_prep_time_field'),
                             controller: _prepTimeController,
                             keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.done,
                             decoration: const InputDecoration(
                               labelText: 'وقت التحضير (بالدقائق) *',
                               hintText: 'مثال: 30, 45, 60',
