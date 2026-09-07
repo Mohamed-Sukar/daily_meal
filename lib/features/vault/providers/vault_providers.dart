@@ -1,0 +1,310 @@
+import 'dart:async';
+import 'package:drift/drift.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/database/database_providers.dart';
+
+/// Reactive stream watching all meals in the vault ordered alphabetically.
+final allMealsProvider = StreamProvider<List<Meal>>((ref) {
+  final dao = ref.watch(mealsDaoProvider);
+  return dao.watchAllMeals();
+});
+
+/// Reactive stream watching only favorite meals.
+final favoriteMealsProvider = StreamProvider<List<Meal>>((ref) {
+  final dao = ref.watch(mealsDaoProvider);
+  return dao.watchFavorites();
+});
+
+/// Filter state model for the Meal Vault list.
+class VaultFilterState {
+  final String searchQuery;
+  final ProteinType? proteinType;
+  final CarbsType? carbsType;
+  final MealCategory? category;
+  final bool isFavoriteOnly;
+  final bool isFridaySpecialOnly;
+  final bool isBudgetFriendlyOnly;
+  final int? maxPrepTime;
+
+  const VaultFilterState({
+    this.searchQuery = '',
+    this.proteinType,
+    this.carbsType,
+    this.category,
+    this.isFavoriteOnly = false,
+    this.isFridaySpecialOnly = false,
+    this.isBudgetFriendlyOnly = false,
+    this.maxPrepTime,
+  });
+
+  // Aliases matching different blueprint conventions
+  ProteinType? get selectedProtein => proteinType;
+  CarbsType? get selectedCarbs => carbsType;
+  MealCategory? get selectedCategory => category;
+  bool get filterFridayOnly => isFridaySpecialOnly;
+  bool get filterBudgetOnly => isBudgetFriendlyOnly;
+  bool get filterFavoriteOnly => isFavoriteOnly;
+
+  bool get hasActiveFilters =>
+      searchQuery.trim().isNotEmpty ||
+      proteinType != null ||
+      carbsType != null ||
+      category != null ||
+      isFavoriteOnly ||
+      isFridaySpecialOnly ||
+      isBudgetFriendlyOnly ||
+      maxPrepTime != null;
+
+  int get activeFilterCount {
+    int count = 0;
+    if (searchQuery.trim().isNotEmpty) count++;
+    if (proteinType != null) count++;
+    if (carbsType != null) count++;
+    if (category != null) count++;
+    if (isFavoriteOnly) count++;
+    if (isFridaySpecialOnly) count++;
+    if (isBudgetFriendlyOnly) count++;
+    if (maxPrepTime != null) count++;
+    return count;
+  }
+
+  VaultFilterState copyWith({
+    String? searchQuery,
+    ProteinType? proteinType,
+    CarbsType? carbsType,
+    MealCategory? category,
+    bool? isFavoriteOnly,
+    bool? isFridaySpecialOnly,
+    bool? isBudgetFriendlyOnly,
+    int? maxPrepTime,
+    bool clearProtein = false,
+    bool clearCarbs = false,
+    bool clearCategory = false,
+  }) {
+    return VaultFilterState(
+      searchQuery: searchQuery ?? this.searchQuery,
+      proteinType: clearProtein ? null : (proteinType ?? this.proteinType),
+      carbsType: clearCarbs ? null : (carbsType ?? this.carbsType),
+      category: clearCategory ? null : (category ?? this.category),
+      isFavoriteOnly: isFavoriteOnly ?? this.isFavoriteOnly,
+      isFridaySpecialOnly: isFridaySpecialOnly ?? this.isFridaySpecialOnly,
+      isBudgetFriendlyOnly: isBudgetFriendlyOnly ?? this.isBudgetFriendlyOnly,
+      maxPrepTime: maxPrepTime ?? this.maxPrepTime,
+    );
+  }
+}
+
+/// Filter state notifier for the Meal Vault.
+class VaultFilterNotifier extends Notifier<VaultFilterState> {
+  @override
+  VaultFilterState build() => const VaultFilterState();
+
+  void setSearchQuery(String query) {
+    state = state.copyWith(searchQuery: query);
+  }
+
+  void toggleProtein(ProteinType protein) {
+    if (state.proteinType == protein) {
+      state = state.copyWith(clearProtein: true);
+    } else {
+      state = state.copyWith(proteinType: protein);
+    }
+  }
+
+  void toggleCarbs(CarbsType carbs) {
+    if (state.carbsType == carbs) {
+      state = state.copyWith(clearCarbs: true);
+    } else {
+      state = state.copyWith(carbsType: carbs);
+    }
+  }
+
+  void toggleCategory(MealCategory category) {
+    if (state.category == category) {
+      state = state.copyWith(clearCategory: true);
+    } else {
+      state = state.copyWith(category: category);
+    }
+  }
+
+  void toggleFridayFilter() {
+    state = state.copyWith(isFridaySpecialOnly: !state.isFridaySpecialOnly);
+  }
+
+  void toggleBudgetFilter() {
+    state = state.copyWith(isBudgetFriendlyOnly: !state.isBudgetFriendlyOnly);
+  }
+
+  void toggleFavoriteFilter() {
+    state = state.copyWith(isFavoriteOnly: !state.isFavoriteOnly);
+  }
+
+  void resetFilters() {
+    state = const VaultFilterState();
+  }
+}
+
+final vaultFilterProvider = NotifierProvider<VaultFilterNotifier, VaultFilterState>(() {
+  return VaultFilterNotifier();
+});
+
+/// Reactive filtered meals stream based on current filters and search query.
+final filteredMealsProvider = Provider<AsyncValue<List<Meal>>>((ref) {
+  final allMealsAsync = ref.watch(allMealsProvider);
+  final filter = ref.watch(vaultFilterProvider);
+
+  return allMealsAsync.whenData((meals) {
+    return meals.where((meal) {
+      // 1. Search Query
+      if (filter.searchQuery.trim().isNotEmpty) {
+        final query = filter.searchQuery.trim().toLowerCase();
+        if (!meal.name.toLowerCase().contains(query)) {
+          return false;
+        }
+      }
+
+      // 2. Protein Filter
+      if (filter.proteinType != null && meal.proteinType != filter.proteinType) {
+        return false;
+      }
+
+      // 3. Carbs Filter
+      if (filter.carbsType != null && meal.carbsType != filter.carbsType) {
+        return false;
+      }
+
+      // 4. Category Filter
+      if (filter.category != null && meal.category != filter.category) {
+        return false;
+      }
+
+      // 5. Flags
+      if (filter.isFavoriteOnly && !meal.isFavorite) {
+        return false;
+      }
+      if (filter.isFridaySpecialOnly && !meal.isFridaySpecial) {
+        return false;
+      }
+      if (filter.isBudgetFriendlyOnly && !meal.isBudgetFriendly) {
+        return false;
+      }
+      if (filter.maxPrepTime != null && meal.prepTime > filter.maxPrepTime!) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  });
+});
+
+/// Alias for compatibility
+final filteredVaultMealsProvider = filteredMealsProvider;
+
+/// Mutation controller for Meal Vault CRUD operations.
+class VaultController extends AsyncNotifier<void> {
+  @override
+  FutureOr<void> build() {}
+
+  /// Inserts a new meal into the vault via named parameters.
+  Future<int> addMeal({
+    required String name,
+    required ProteinType proteinType,
+    required CarbsType carbsType,
+    required MealCategory category,
+    required int prepTimeMinutes,
+    String? photoPath,
+    bool isFridaySpecial = false,
+    bool isBudgetFriendly = false,
+    bool isFavorite = false,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw ArgumentError('Meal name cannot be empty');
+    }
+    if (prepTimeMinutes <= 0) {
+      throw ArgumentError('Prep time must be positive');
+    }
+
+    state = const AsyncValue.loading();
+    try {
+      final dao = ref.read(mealsDaoProvider);
+      final id = await dao.insertMeal(
+        MealsCompanion(
+          name: Value(cleanName),
+          proteinType: Value(proteinType),
+          carbsType: Value(carbsType),
+          category: Value(category),
+          prepTime: Value(prepTimeMinutes),
+          photoPath: photoPath != null ? Value(photoPath) : const Value.absent(),
+          isFridaySpecial: Value(isFridaySpecial),
+          isBudgetFriendly: Value(isBudgetFriendly),
+          isFavorite: Value(isFavorite),
+        ),
+      );
+      state = const AsyncValue.data(null);
+      return id;
+    } catch (err, st) {
+      state = AsyncValue.error(err, st);
+      rethrow;
+    }
+  }
+
+  /// Inserts a new meal into the vault via MealsCompanion.
+  Future<int> addMealCompanion(MealsCompanion companion) async {
+    state = const AsyncValue.loading();
+    try {
+      final dao = ref.read(mealsDaoProvider);
+      final id = await dao.insertMeal(companion);
+      state = const AsyncValue.data(null);
+      return id;
+    } catch (err, st) {
+      state = AsyncValue.error(err, st);
+      rethrow;
+    }
+  }
+
+  /// Updates an existing meal entity.
+  Future<bool> updateMeal(Meal meal) async {
+    state = const AsyncValue.loading();
+    try {
+      final dao = ref.read(mealsDaoProvider);
+      final success = await dao.updateMeal(meal);
+      state = const AsyncValue.data(null);
+      return success;
+    } catch (err, st) {
+      state = AsyncValue.error(err, st);
+      rethrow;
+    }
+  }
+
+  /// Deletes a meal from the vault.
+  /// SQLite foreign key 'ON DELETE SET NULL' preserves existing history records.
+  Future<int> deleteMeal(int id) async {
+    state = const AsyncValue.loading();
+    try {
+      final dao = ref.read(mealsDaoProvider);
+      final deleted = await dao.deleteMeal(id);
+      state = const AsyncValue.data(null);
+      return deleted;
+    } catch (err, st) {
+      state = AsyncValue.error(err, st);
+      rethrow;
+    }
+  }
+
+  /// Toggles favorite status of a meal.
+  Future<void> toggleFavorite(int id, [bool? currentStatus]) async {
+    try {
+      final dao = ref.read(mealsDaoProvider);
+      await dao.toggleFavorite(id, currentStatus);
+    } catch (err, st) {
+      state = AsyncValue.error(err, st);
+      rethrow;
+    }
+  }
+}
+
+final vaultControllerProvider = AsyncNotifierProvider<VaultController, void>(() {
+  return VaultController();
+});
